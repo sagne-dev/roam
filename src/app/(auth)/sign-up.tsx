@@ -14,7 +14,6 @@ import {
   ThemedText,
   InputField,
   Button,
-  IconButton,
   GoogleIcon,
 } from "@/components";
 
@@ -24,6 +23,14 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/");
+    }
+  };
 
   const handleSignUp = () => {
     setLoading(true);
@@ -54,14 +61,28 @@ export default function SignUpScreen() {
             paddingVertical: spacing.sm,
           }}
         >
-          <IconButton
-            icon={<Ionicons name="chevron-back" size={22} color={colors.textPrimary} />}
-            onPress={() => router.back()}
-            accessibilityLabel="Go back"
-            variant="outline"
-            size="md"
-          />
-          <ThemedText variant="caption" style={{ color: colors.textSecondary }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back to onboarding"
+            hitSlop={12}
+            onPress={handleBack}
+            style={({ pressed }) => [
+              {
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: colors.surfaceGray,
+                borderWidth: 1,
+                borderColor: colors.borderGray,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </Pressable>
+          <ThemedText variant="caption" style={{ color: colors.textSecondary, fontWeight: "500" }}>
             Sign Up
           </ThemedText>
           <View style={{ width: 44 }} />
