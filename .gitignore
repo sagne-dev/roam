@@ -30,8 +30,15 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files and secrets
+.env
+.env.*
+!.env.example
 .env*.local
+
+# Clerk API Keys
+# EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY
+# CLERK_SECRET_KEY
 
 # typescript
 *.tsbuildinfo

@@ -9,8 +9,12 @@ import {
   PlusJakartaSans_600SemiBold,
   PlusJakartaSans_700Bold,
 } from "@expo-google-fonts/plus-jakarta-sans";
+import { ClerkProvider, ClerkLoaded } from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
 
 SplashScreen.preventAutoHideAsync();
+
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -28,6 +32,20 @@ export default function RootLayout() {
 
   if (!loaded && !error) {
     return null;
+  }
+
+  if (publishableKey) {
+    return (
+      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+        <ClerkLoaded>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+            }}
+          />
+        </ClerkLoaded>
+      </ClerkProvider>
+    );
   }
 
   return (
