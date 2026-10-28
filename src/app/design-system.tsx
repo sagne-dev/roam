@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@clerk/expo";
 import { colors, spacing, radius, fonts } from "@/theme";
 import {
   ThemedText,
@@ -28,6 +29,48 @@ import {
   ListingCard,
   LiquidGlassTabBar,
 } from "@/components";
+
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+function ClerkSignOutButton() {
+  const { signOut } = useAuth();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } finally {
+      router.replace("/");
+    }
+  };
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Sign out"
+      onPress={handleSignOut}
+      style={({ pressed }) => [
+        {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          backgroundColor: colors.errorBackground,
+          borderColor: colors.errorBorder,
+          borderWidth: 1,
+          borderRadius: radius.full,
+          paddingVertical: 6,
+          paddingHorizontal: 12,
+          opacity: pressed ? 0.75 : 1,
+        },
+      ]}
+    >
+      <Ionicons name="log-out-outline" size={16} color={colors.error} />
+      <ThemedText variant="caption" style={{ color: colors.error, fontWeight: "600" }}>
+        Sign out
+      </ThemedText>
+    </Pressable>
+  );
+}
 
 export default function DesignSystemScreen() {
   const router = useRouter();
@@ -56,15 +99,42 @@ export default function DesignSystemScreen() {
       >
         {/* Header / Intro */}
         <View style={{ gap: 8 }}>
-          <Pressable
-            onPress={() => router.replace("/")}
-            style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-          >
-            <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
-            <ThemedText variant="caption" style={{ fontWeight: "600", color: colors.textPrimary }}>
-              Back to Onboarding
-            </ThemedText>
-          </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Pressable
+              onPress={() => router.replace("/")}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
+              <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
+              <ThemedText variant="caption" style={{ fontWeight: "600", color: colors.textPrimary }}>
+                Onboarding
+              </ThemedText>
+            </Pressable>
+
+            {publishableKey ? (
+              <ClerkSignOutButton />
+            ) : (
+              <Pressable
+                onPress={() => router.replace("/")}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  backgroundColor: colors.surfaceWhite,
+                  borderColor: colors.borderGray,
+                  borderWidth: 1,
+                  borderRadius: radius.full,
+                  paddingVertical: 5,
+                  paddingHorizontal: 10,
+                }}
+              >
+                <Ionicons name="log-out-outline" size={14} color={colors.textSecondary} />
+                <ThemedText variant="caption" style={{ color: colors.textSecondary }}>
+                  Sign out
+                </ThemedText>
+              </Pressable>
+            )}
+          </View>
+
           <ThemedText
             variant="caption"
             style={{ textTransform: "uppercase", letterSpacing: 1.5, color: colors.textSecondary }}

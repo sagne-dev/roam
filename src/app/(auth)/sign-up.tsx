@@ -9,22 +9,37 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSignUp } from "@clerk/expo/legacy";
 import { colors, spacing, radius } from "@/theme";
 import {
   ThemedText,
   InputField,
   Button,
   GoogleIcon,
+  AlertBanner,
 } from "@/components";
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const { isLoaded, signUp, setActive } = useSignUp();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [resendSuccess, setResendSuccess] = useState(false);
 
   const handleBack = () => {
+    if (pendingVerification) {
+      // Step back from code verification to edit details
+      setPendingVerification(false);
+      setCode("");
+      setError("");
+      return;
+    }
     if (router.canGoBack()) {
       router.back();
     } else {
@@ -32,17 +47,94 @@ export default function SignUpScreen() {
     }
   };
 
-  const handleSignUp = () => {
-    setLoading(true);
-    setTimeout(() => {
+  const handleSignUp = async () => {
+    if (!name.trim() || !email.trim() || !password) {
+      setError("Please fill in all fields.");
+      return;
+    }
+    if (!isLoaded || !signUp) {
+      setError("Authentication is initializing. Please ensure EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is configured in your .env file.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      const nameParts = name.trim().split(" ");
+      const firstName = nameParts[0] || name.trim();
+      const lastName = nameParts.slice(1).join(" ") || undefined;
+
+      await signUp.create({
+        emailAddress: email.trim(),
+        password,
+        firstName,
+        lastName,
+      });
+
+      // Prepare email verification to send 6-digit OTP code
+      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+      setPendingVerification(true);
+    } catch (err: any) {
+      const msg =
+        err?.errors?.[0]?.longMessage ||
+        err?.errors?.[0]?.message ||
+        "Sign up failed. Please check your credentials.";
+      setError(msg);
+    } finally {
       setLoading(false);
-      // In guest/prototype mode, route into the main app
-      router.replace("/design-system");
-    }, 600);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!code.trim()) {
+      setError("Please enter the 6-digit verification code.");
+      return;
+    }
+    if (!isLoaded || !signUp) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      const completeSignUp = await signUp.attemptEmailAddressVerification({
+        code: code.trim(),
+      });
+
+      if (completeSignUp.status === "complete") {
+        await setActive({ session: completeSignUp.createdSessionId });
+        router.replace("/design-system");
+      } else {
+        setError("Verification incomplete. Please check your details and try again.");
+      }
+    } catch (err: any) {
+      const msg =
+        err?.errors?.[0]?.longMessage ||
+        err?.errors?.[0]?.message ||
+        "Invalid or expired verification code.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (!isLoaded || !signUp) return;
+    try {
+      setError("");
+      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+      setResendSuccess(true);
+      setTimeout(() => setResendSuccess(false), 4000);
+    } catch (err: any) {
+      const msg =
+        err?.errors?.[0]?.message || "Could not resend verification code.";
+      setError(msg);
+    }
   };
 
   const handleGoogleSignUp = () => {
-    router.replace("/design-system");
+    // Navigates to sign-in screen or initiates OAuth
+    router.replace("/(auth)/sign-in");
   };
 
   return (
@@ -63,7 +155,7 @@ export default function SignUpScreen() {
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Go back to onboarding"
+            accessibilityLabel={pendingVerification ? "Back to registration" : "Go back to onboarding"}
             hitSlop={12}
             onPress={handleBack}
             style={({ pressed }) => [
@@ -83,7 +175,7 @@ export default function SignUpScreen() {
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </Pressable>
           <ThemedText variant="caption" style={{ color: colors.textSecondary, fontWeight: "500" }}>
-            Sign Up
+            {pendingVerification ? "Verify Email" : "Sign Up"}
           </ThemedText>
           <View style={{ width: 44 }} />
         </View>
@@ -101,156 +193,226 @@ export default function SignUpScreen() {
           {/* Header */}
           <View style={{ gap: spacing.xs }}>
             <ThemedText variant="heading" style={{ color: colors.textPrimary }}>
-              Create your account
+              {pendingVerification ? "Verify your email" : "Create your account"}
             </ThemedText>
             <ThemedText variant="body" style={{ color: colors.textSecondary }}>
-              Join roam to find and book unique stays tailored to your story.
+              {pendingVerification
+                ? `Enter the 6-digit verification code sent to ${email}`
+                : "Join roam to find and book unique stays tailored to your story."}
             </ThemedText>
           </View>
 
-          {/* Form */}
-          <View style={{ gap: spacing.md, marginTop: spacing.xs }}>
-            <View style={{ gap: 6 }}>
-              <ThemedText variant="caption" style={{ fontWeight: "600", color: colors.textPrimary }}>
-                Full name
-              </ThemedText>
-              <InputField
-                placeholder="e.g. Joanna Smith"
-                autoCapitalize="words"
-                value={name}
-                onChangeText={setName}
-                leftIcon={<Ionicons name="person-outline" size={20} color={colors.textSecondary} />}
+          {/* Feedback Alerts */}
+          {error ? (
+            <AlertBanner
+              type="error"
+              message={error}
+              onDismiss={() => setError("")}
+            />
+          ) : null}
+
+          {resendSuccess ? (
+            <AlertBanner
+              type="success"
+              message="A fresh verification code was sent to your email."
+            />
+          ) : null}
+
+          {pendingVerification ? (
+            /* STEP 2: Email Code Verification */
+            <View style={{ gap: spacing.lg, marginTop: spacing.xs }}>
+              <View style={{ gap: 6 }}>
+                <ThemedText variant="caption" style={{ fontWeight: "600", color: colors.textPrimary }}>
+                  6-Digit Verification Code
+                </ThemedText>
+                <InputField
+                  placeholder="e.g. 123456"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  value={code}
+                  onChangeText={(val) => {
+                    setCode(val);
+                    if (error) setError("");
+                  }}
+                  leftIcon={<Ionicons name="key-outline" size={20} color={colors.textSecondary} />}
+                />
+              </View>
+
+              <Button
+                title="Verify and continue"
+                variant="primary"
+                size="lg"
+                loading={loading}
+                onPress={handleVerify}
               />
-            </View>
 
-            <View style={{ gap: 6 }}>
-              <ThemedText variant="caption" style={{ fontWeight: "600", color: colors.textPrimary }}>
-                Email address
-              </ThemedText>
-              <InputField
-                placeholder="you@domain.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                value={email}
-                onChangeText={setEmail}
-                leftIcon={<Ionicons name="mail-outline" size={20} color={colors.textSecondary} />}
+              <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 }}>
+                <ThemedText variant="caption" style={{ color: colors.textSecondary }}>
+                  {"Didn't receive the code?"}
+                </ThemedText>
+                <Pressable onPress={handleResendCode} hitSlop={8}>
+                  <ThemedText variant="caption" style={{ color: colors.textPrimary, fontWeight: "700" }}>
+                    Resend code
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            /* STEP 1: Registration Form */
+            <>
+              <View style={{ gap: spacing.md, marginTop: spacing.xs }}>
+                <View style={{ gap: 6 }}>
+                  <ThemedText variant="caption" style={{ fontWeight: "600", color: colors.textPrimary }}>
+                    Full name
+                  </ThemedText>
+                  <InputField
+                    placeholder="e.g. Joanna Smith"
+                    autoCapitalize="words"
+                    value={name}
+                    onChangeText={(val) => {
+                      setName(val);
+                      if (error) setError("");
+                    }}
+                    leftIcon={<Ionicons name="person-outline" size={20} color={colors.textSecondary} />}
+                  />
+                </View>
+
+                <View style={{ gap: 6 }}>
+                  <ThemedText variant="caption" style={{ fontWeight: "600", color: colors.textPrimary }}>
+                    Email address
+                  </ThemedText>
+                  <InputField
+                    placeholder="you@domain.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={email}
+                    onChangeText={(val) => {
+                      setEmail(val);
+                      if (error) setError("");
+                    }}
+                    leftIcon={<Ionicons name="mail-outline" size={20} color={colors.textSecondary} />}
+                  />
+                </View>
+
+                <View style={{ gap: 6 }}>
+                  <ThemedText variant="caption" style={{ fontWeight: "600", color: colors.textPrimary }}>
+                    Password
+                  </ThemedText>
+                  <InputField
+                    placeholder="Create a secure password"
+                    isPassword
+                    value={password}
+                    onChangeText={(val) => {
+                      setPassword(val);
+                      if (error) setError("");
+                    }}
+                    leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} />}
+                  />
+                </View>
+              </View>
+
+              {/* Primary Action */}
+              <Button
+                title="Create account"
+                variant="primary"
+                size="lg"
+                loading={loading}
+                onPress={handleSignUp}
+                style={{ marginTop: spacing.xs }}
               />
-            </View>
 
-            <View style={{ gap: 6 }}>
-              <ThemedText variant="caption" style={{ fontWeight: "600", color: colors.textPrimary }}>
-                Password
-              </ThemedText>
-              <InputField
-                placeholder="Create a secure password"
-                isPassword
-                value={password}
-                onChangeText={setPassword}
-                leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} />}
-              />
-            </View>
-          </View>
-
-          {/* Primary Action */}
-          <Button
-            title="Create account"
-            variant="primary"
-            size="lg"
-            loading={loading}
-            onPress={handleSignUp}
-            style={{ marginTop: spacing.xs }}
-          />
-
-          {/* Divider */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: spacing.md,
-              marginVertical: spacing.xs,
-            }}
-          >
-            <View style={{ flex: 1, height: 1, backgroundColor: colors.borderGray }} />
-            <ThemedText variant="caption" style={{ color: colors.textSecondary }}>
-              or sign up with
-            </ThemedText>
-            <View style={{ flex: 1, height: 1, backgroundColor: colors.borderGray }} />
-          </View>
-
-          {/* Social Sign Up Buttons */}
-          <View style={{ gap: spacing.sm }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Continue with Google"
-              onPress={handleGoogleSignUp}
-              style={({ pressed }) => [
-                {
+              {/* Divider */}
+              <View
+                style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  justifyContent: "center",
-                  gap: spacing.sm,
-                  backgroundColor: colors.surfaceWhite,
-                  borderColor: colors.borderGray,
-                  borderWidth: 1,
-                  borderRadius: radius.full,
-                  paddingVertical: 14,
-                  opacity: pressed ? 0.75 : 1,
-                },
-              ]}
-            >
-              <GoogleIcon size={20} />
-              <ThemedText variant="button" style={{ color: colors.textPrimary, fontWeight: "600" }}>
-                Continue with Google
-              </ThemedText>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Continue with Apple"
-              onPress={handleGoogleSignUp}
-              style={({ pressed }) => [
-                {
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: spacing.sm,
-                  backgroundColor: colors.textPrimary,
-                  borderRadius: radius.full,
-                  paddingVertical: 14,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <Ionicons name="logo-apple" size={20} color={colors.surfaceWhite} />
-              <ThemedText variant="button" style={{ color: colors.surfaceWhite, fontWeight: "600" }}>
-                Continue with Apple
-              </ThemedText>
-            </Pressable>
-          </View>
-
-          {/* Footer toggle */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: spacing.xs,
-              marginTop: spacing.sm,
-            }}
-          >
-            <ThemedText variant="body" style={{ color: colors.textSecondary }}>
-              Already have an account?
-            </ThemedText>
-            <Pressable onPress={() => router.replace("/(auth)/sign-in")} hitSlop={8}>
-              <ThemedText
-                variant="body"
-                style={{ color: colors.textPrimary, fontWeight: "700" }}
+                  gap: spacing.md,
+                  marginVertical: spacing.xs,
+                }}
               >
-                Sign in
-              </ThemedText>
-            </Pressable>
-          </View>
+                <View style={{ flex: 1, height: 1, backgroundColor: colors.borderGray }} />
+                <ThemedText variant="caption" style={{ color: colors.textSecondary }}>
+                  or sign up with
+                </ThemedText>
+                <View style={{ flex: 1, height: 1, backgroundColor: colors.borderGray }} />
+              </View>
+
+              {/* Social Sign Up Buttons */}
+              <View style={{ gap: spacing.sm }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue with Google"
+                  onPress={handleGoogleSignUp}
+                  style={({ pressed }) => [
+                    {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: spacing.sm,
+                      backgroundColor: colors.surfaceWhite,
+                      borderColor: colors.borderGray,
+                      borderWidth: 1,
+                      borderRadius: radius.full,
+                      paddingVertical: 14,
+                      opacity: pressed ? 0.75 : 1,
+                    },
+                  ]}
+                >
+                  <GoogleIcon size={20} />
+                  <ThemedText variant="button" style={{ color: colors.textPrimary, fontWeight: "600" }}>
+                    Continue with Google
+                  </ThemedText>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue with Apple"
+                  onPress={handleGoogleSignUp}
+                  style={({ pressed }) => [
+                    {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: spacing.sm,
+                      backgroundColor: colors.textPrimary,
+                      borderRadius: radius.full,
+                      paddingVertical: 14,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <Ionicons name="logo-apple" size={20} color={colors.surfaceWhite} />
+                  <ThemedText variant="button" style={{ color: colors.surfaceWhite, fontWeight: "600" }}>
+                    Continue with Apple
+                  </ThemedText>
+                </Pressable>
+              </View>
+
+              {/* Footer toggle */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: spacing.xs,
+                  marginTop: spacing.sm,
+                }}
+              >
+                <ThemedText variant="body" style={{ color: colors.textSecondary }}>
+                  Already have an account?
+                </ThemedText>
+                <Pressable onPress={() => router.replace("/(auth)/sign-in")} hitSlop={8}>
+                  <ThemedText
+                    variant="body"
+                    style={{ color: colors.textPrimary, fontWeight: "700" }}
+                  >
+                    Sign in
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

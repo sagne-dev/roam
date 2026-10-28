@@ -9,19 +9,24 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSignIn } from "@clerk/expo/legacy";
 import { colors, spacing, radius } from "@/theme";
 import {
   ThemedText,
   InputField,
   Button,
   GoogleIcon,
+  AlertBanner,
 } from "@/components";
 
 export default function SignInScreen() {
   const router = useRouter();
+  const { isLoaded, signIn, setActive } = useSignIn();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -31,16 +36,43 @@ export default function SignInScreen() {
     }
   };
 
-  const handleSignIn = () => {
-    setLoading(true);
-    setTimeout(() => {
+  const handleSignIn = async () => {
+    if (!email.trim() || !password) {
+      setError("Please enter your email and password.");
+      return;
+    }
+    if (!isLoaded || !signIn) {
+      setError("Authentication is initializing. Please ensure EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is configured in your .env file.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      const signInAttempt = await signIn.create({
+        identifier: email.trim(),
+        password,
+      });
+
+      if (signInAttempt.status === "complete") {
+        await setActive({ session: signInAttempt.createdSessionId });
+        router.replace("/design-system");
+      } else {
+        setError("Sign in requires additional verification steps.");
+      }
+    } catch (err: any) {
+      const msg =
+        err?.errors?.[0]?.longMessage ||
+        err?.errors?.[0]?.message ||
+        "Invalid email or password. Please check your credentials.";
+      setError(msg);
+    } finally {
       setLoading(false);
-      // In guest/prototype mode, route into the main app
-      router.replace("/design-system");
-    }, 600);
+    }
   };
 
   const handleGoogleSignIn = () => {
+    // Navigates or initiates OAuth
     router.replace("/design-system");
   };
 
@@ -107,6 +139,15 @@ export default function SignInScreen() {
             </ThemedText>
           </View>
 
+          {/* Feedback Alerts */}
+          {error ? (
+            <AlertBanner
+              type="error"
+              message={error}
+              onDismiss={() => setError("")}
+            />
+          ) : null}
+
           {/* Form */}
           <View style={{ gap: spacing.md, marginTop: spacing.xs }}>
             <View style={{ gap: 6 }}>
@@ -119,7 +160,10 @@ export default function SignInScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(val) => {
+                  setEmail(val);
+                  if (error) setError("");
+                }}
                 leftIcon={<Ionicons name="mail-outline" size={20} color={colors.textSecondary} />}
               />
             </View>
@@ -132,7 +176,10 @@ export default function SignInScreen() {
                 placeholder="Enter your password"
                 isPassword
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(val) => {
+                  setPassword(val);
+                  if (error) setError("");
+                }}
                 leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} />}
               />
             </View>
