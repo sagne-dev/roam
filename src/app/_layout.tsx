@@ -9,15 +9,12 @@ import {
   PlusJakartaSans_600SemiBold,
   PlusJakartaSans_700Bold,
 } from "@expo-google-fonts/plus-jakarta-sans";
-import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/expo";
+import { ClerkProvider, useAuth } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 
 SplashScreen.preventAutoHideAsync();
 
-// Fallback key ensures ClerkProvider is always mounted so hooks like useSignIn/useSignUp never crash
-const FALLBACK_CLERK_KEY = "pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk";
-const publishableKey =
-  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || FALLBACK_CLERK_KEY;
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 function ProtectedLayout() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -25,8 +22,6 @@ function ProtectedLayout() {
   const router = useRouter();
 
   useEffect(() => {
-    // Only perform automatic route protection redirects when live Clerk key is configured
-    if (!process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY) return;
     if (!isLoaded) return;
 
     const inAuthGroup = segments[0] === "(auth)";
@@ -64,11 +59,21 @@ export default function RootLayout() {
     return null;
   }
 
-  return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <ClerkLoaded>
+  // When live Clerk key is configured, wrap with ClerkProvider
+  if (publishableKey) {
+    return (
+      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
         <ProtectedLayout />
-      </ClerkLoaded>
-    </ClerkProvider>
+      </ClerkProvider>
+    );
+  }
+
+  // Default clean stack without ClerkProvider to ensure instant rendering without white screens
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+      }}
+    />
   );
 }
