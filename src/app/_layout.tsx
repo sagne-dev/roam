@@ -14,7 +14,10 @@ import { tokenCache } from "@clerk/expo/token-cache";
 
 SplashScreen.preventAutoHideAsync();
 
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+// Fallback key ensures ClerkProvider is always mounted so hooks like useSignIn/useSignUp never crash
+const FALLBACK_CLERK_KEY = "pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk";
+const publishableKey =
+  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || FALLBACK_CLERK_KEY;
 
 function ProtectedLayout() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -22,6 +25,8 @@ function ProtectedLayout() {
   const router = useRouter();
 
   useEffect(() => {
+    // Only perform automatic route protection redirects when live Clerk key is configured
+    if (!process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY) return;
     if (!isLoaded) return;
 
     const inAuthGroup = segments[0] === "(auth)";
@@ -59,21 +64,11 @@ export default function RootLayout() {
     return null;
   }
 
-  if (publishableKey) {
-    return (
-      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-        <ClerkLoaded>
-          <ProtectedLayout />
-        </ClerkLoaded>
-      </ClerkProvider>
-    );
-  }
-
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-      }}
-    />
+    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+      <ClerkLoaded>
+        <ProtectedLayout />
+      </ClerkLoaded>
+    </ClerkProvider>
   );
 }

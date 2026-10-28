@@ -32,6 +32,8 @@ export default function SignUpScreen() {
   const [error, setError] = useState("");
   const [resendSuccess, setResendSuccess] = useState(false);
 
+  const isConfigured = Boolean(process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
   const handleBack = () => {
     if (pendingVerification) {
       // Step back from code verification to edit details
@@ -52,8 +54,19 @@ export default function SignUpScreen() {
       setError("Please fill in all fields.");
       return;
     }
+
+    // In demo mode without configured Clerk key, simulate the verification step cleanly
+    if (!isConfigured) {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        setPendingVerification(true);
+      }, 300);
+      return;
+    }
+
     if (!isLoaded || !signUp) {
-      setError("Authentication is initializing. Please ensure EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is configured in your .env file.");
+      setError("Authentication service is initializing. Please try again.");
       return;
     }
 
@@ -90,6 +103,17 @@ export default function SignUpScreen() {
       setError("Please enter the 6-digit verification code.");
       return;
     }
+
+    // In demo mode without configured Clerk key, simulate successful verification
+    if (!isConfigured) {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        router.replace("/design-system");
+      }, 400);
+      return;
+    }
+
     if (!isLoaded || !signUp) {
       return;
     }
@@ -119,6 +143,12 @@ export default function SignUpScreen() {
   };
 
   const handleResendCode = async () => {
+    if (!isConfigured) {
+      setResendSuccess(true);
+      setTimeout(() => setResendSuccess(false), 4000);
+      return;
+    }
+
     if (!isLoaded || !signUp) return;
     try {
       setError("");
@@ -133,7 +163,6 @@ export default function SignUpScreen() {
   };
 
   const handleGoogleSignUp = () => {
-    // Navigates to sign-in screen or initiates OAuth
     router.replace("/(auth)/sign-in");
   };
 
@@ -202,7 +231,14 @@ export default function SignUpScreen() {
             </ThemedText>
           </View>
 
-          {/* Feedback Alerts */}
+          {/* Configuration Banner / Error alerts */}
+          {!isConfigured && !pendingVerification ? (
+            <AlertBanner
+              type="error"
+              message="Demo Mode: Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to your .env file to enable live Clerk authentication."
+            />
+          ) : null}
+
           {error ? (
             <AlertBanner
               type="error"

@@ -28,6 +28,8 @@ export default function SignInScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const isConfigured = Boolean(process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
   const handleBack = () => {
     if (router.canGoBack()) {
       router.back();
@@ -41,8 +43,19 @@ export default function SignInScreen() {
       setError("Please enter your email and password.");
       return;
     }
+
+    // If Clerk key is not yet configured, provide seamless prototype sign-in
+    if (!isConfigured) {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        router.replace("/design-system");
+      }, 400);
+      return;
+    }
+
     if (!isLoaded || !signIn) {
-      setError("Authentication is initializing. Please ensure EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is configured in your .env file.");
+      setError("Authentication service is initializing. Please try again.");
       return;
     }
 
@@ -72,7 +85,6 @@ export default function SignInScreen() {
   };
 
   const handleGoogleSignIn = () => {
-    // Navigates or initiates OAuth
     router.replace("/design-system");
   };
 
@@ -139,7 +151,14 @@ export default function SignInScreen() {
             </ThemedText>
           </View>
 
-          {/* Feedback Alerts */}
+          {/* Configuration Banner / Error alerts */}
+          {!isConfigured ? (
+            <AlertBanner
+              type="error"
+              message="Demo Mode: Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to your .env file to enable live Clerk authentication."
+            />
+          ) : null}
+
           {error ? (
             <AlertBanner
               type="error"
