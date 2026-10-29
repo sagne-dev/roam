@@ -30,7 +30,9 @@ import {
   LiquidGlassTabBar,
 } from "@/components";
 
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const publishableKey =
+  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 function ClerkSignOutButton() {
   const { signOut } = useAuth();

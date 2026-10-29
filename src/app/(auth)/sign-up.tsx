@@ -19,7 +19,10 @@ import {
   AlertBanner,
 } from "@/components";
 
-const isClerkConfigured = Boolean(process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY);
+const isClerkConfigured = Boolean(
+  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+);
 
 interface SignUpFormProps {
   onBack: () => void;
